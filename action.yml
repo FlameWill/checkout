@@ -1,0 +1,124 @@
+name: FlameWill checkout
+description: actions/checkout with a repository checkout cache on FlameWill runners. Everywhere else it is exactly actions/checkout.
+author: FlameWill
+branding:
+  icon: git-branch
+  color: orange
+
+# Every input is actions/checkout's (v7.0.1), with the same default, passed through unchanged; `dissociate` is FlameWill's.
+inputs:
+  repository:
+    description: Repository name with owner, as in actions/checkout.
+    default: ${{ github.repository }}
+  ref:
+    description: The branch, tag or SHA to check out, as in actions/checkout.
+  token:
+    description: Token used to fetch the repository, as in actions/checkout. On a FlameWill runner it also refreshes the checkout cache from the default branch.
+    default: ${{ github.token }}
+  ssh-key:
+    description: As in actions/checkout.
+  ssh-known-hosts:
+    description: As in actions/checkout.
+  ssh-strict:
+    description: As in actions/checkout.
+    default: true
+  ssh-user:
+    description: As in actions/checkout.
+    default: git
+  persist-credentials:
+    description: As in actions/checkout.
+    default: true
+  path:
+    description: Relative path under $GITHUB_WORKSPACE to place the repository, as in actions/checkout.
+  clean:
+    description: As in actions/checkout.
+    default: true
+  filter:
+    description: As in actions/checkout.
+  sparse-checkout:
+    description: As in actions/checkout.
+  sparse-checkout-cone-mode:
+    description: As in actions/checkout.
+    default: true
+  fetch-depth:
+    description: Number of commits to fetch, 0 for all history, as in actions/checkout.
+    default: 1
+  fetch-tags:
+    description: As in actions/checkout.
+    default: false
+  show-progress:
+    description: As in actions/checkout.
+    default: true
+  lfs:
+    description: As in actions/checkout.
+    default: false
+  submodules:
+    description: As in actions/checkout.
+    default: false
+  set-safe-directory:
+    description: As in actions/checkout.
+    default: true
+  github-server-url:
+    description: As in actions/checkout.
+  allow-unsafe-pr-checkout:
+    description: As in actions/checkout.
+    default: false
+  dissociate:
+    description: Copy every object the checkout reads from the cache into the repository itself, for later steps that run in a container. Slower; off by default.
+    default: false
+
+outputs:
+  ref:
+    description: The branch, tag or SHA that was checked out.
+    value: ${{ steps.checkout.outputs.ref }}
+  commit:
+    description: The commit SHA that was checked out.
+    value: ${{ steps.checkout.outputs.commit }}
+
+runs:
+  using: composite
+  steps:
+    - name: Restore the checkout cache
+      if: inputs.repository == github.repository
+      shell: bash
+      run: if command -v fw-mirror >/dev/null 2>&1; then fw-mirror restore; fi
+
+    - name: Checkout
+      id: checkout
+      uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      with:
+        repository: ${{ inputs.repository }}
+        ref: ${{ inputs.ref }}
+        token: ${{ inputs.token }}
+        ssh-key: ${{ inputs.ssh-key }}
+        ssh-known-hosts: ${{ inputs.ssh-known-hosts }}
+        ssh-strict: ${{ inputs.ssh-strict }}
+        ssh-user: ${{ inputs.ssh-user }}
+        persist-credentials: ${{ inputs.persist-credentials }}
+        path: ${{ inputs.path }}
+        clean: ${{ inputs.clean }}
+        filter: ${{ inputs.filter }}
+        sparse-checkout: ${{ inputs.sparse-checkout }}
+        sparse-checkout-cone-mode: ${{ inputs.sparse-checkout-cone-mode }}
+        fetch-depth: ${{ inputs.fetch-depth }}
+        fetch-tags: ${{ inputs.fetch-tags }}
+        show-progress: ${{ inputs.show-progress }}
+        lfs: ${{ inputs.lfs }}
+        submodules: ${{ inputs.submodules }}
+        set-safe-directory: ${{ inputs.set-safe-directory }}
+        github-server-url: ${{ inputs.github-server-url }}
+        allow-unsafe-pr-checkout: ${{ inputs.allow-unsafe-pr-checkout }}
+
+    - name: Copy the cached objects into the repository
+      if: inputs.dissociate == 'true'
+      shell: bash
+      env:
+        CHECKOUT_PATH: ${{ github.workspace }}/${{ inputs.path }}
+      run: if command -v fw-mirror >/dev/null 2>&1; then fw-mirror dissociate "$CHECKOUT_PATH"; fi
+
+    - name: Refresh the checkout cache
+      if: inputs.repository == github.repository
+      shell: bash
+      env:
+        FW_TOKEN: ${{ inputs.token }}
+      run: if command -v fw-mirror >/dev/null 2>&1; then fw-mirror publish; fi
